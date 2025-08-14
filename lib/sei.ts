@@ -43,6 +43,7 @@ export const getSeiNetworkParams = () => ({
   },
   rpcUrls: ["https://evm-rpc.sei-apis.com"],
   blockExplorerUrls: ["https://seitrace.com"],
+  iconUrls: ["https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png"],
 })
 
 // DragonSwap contract addresses
@@ -64,10 +65,17 @@ export const isValidSeiNetwork = (chainId: string | null): boolean => {
 
 export const requireSeiNetwork = async (): Promise<boolean> => {
   if (typeof window === "undefined" || !window.ethereum) {
-    throw new Error("MetaMask not installed")
+    throw new Error("MetaMask not installed. Please install MetaMask to use this feature.")
   }
 
   try {
+    // First, ensure we have account access
+    const accounts = await window.ethereum.request({ method: "eth_accounts" })
+    if (accounts.length === 0) {
+      // Request account access first
+      await window.ethereum.request({ method: "eth_requestAccounts" })
+    }
+
     const chainId = await window.ethereum.request({ method: "eth_chainId" })
 
     if (!isValidSeiNetwork(chainId)) {
@@ -77,23 +85,36 @@ export const requireSeiNetwork = async (): Promise<boolean> => {
           method: "wallet_switchEthereumChain",
           params: [{ chainId: "0x531" }],
         })
-        return true
+
+        // Verify the switch was successful
+        const newChainId = await window.ethereum.request({ method: "eth_chainId" })
+        return isValidSeiNetwork(newChainId)
       } catch (switchError: any) {
         // If network doesn't exist, add it
         if (switchError.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [getSeiNetworkParams()],
-          })
-          return true
+          try {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [getSeiNetworkParams()],
+            })
+
+            // Verify the addition was successful
+            const newChainId = await window.ethereum.request({ method: "eth_chainId" })
+            return isValidSeiNetwork(newChainId)
+          } catch (addError) {
+            throw new Error("Failed to add Sei network to MetaMask")
+          }
+        } else if (switchError.code === 4001) {
+          throw new Error("User rejected network switch")
+        } else {
+          throw new Error("Failed to switch to Sei network")
         }
-        throw new Error("Failed to switch to Sei network")
       }
     }
     return true
   } catch (error) {
     console.error("Network guard error:", error)
-    return false
+    throw error
   }
 }
 
@@ -116,35 +137,65 @@ export const getCurrentWalletAddress = async (): Promise<string | null> => {
 }
 
 export const getNetworkStatus = async () => {
-  if (typeof window === "undefined" || !window.ethereum) {
+  if (typeof window === "undefined") {
     return {
       isConnected: false,
       chainId: null,
       blockNumber: null,
       latency: null,
       isOnSeiNetwork: false,
-      error: "No wallet detected",
+      error: "Server-side rendering",
+    }
+  }
+
+  if (!window.ethereum) {
+    return {
+      isConnected: false,
+      chainId: null,
+      blockNumber: null,
+      latency: null,
+      isOnSeiNetwork: false,
+      error: "MetaMask not installed",
     }
   }
 
   try {
     const startTime = Date.now()
-    const [chainId, blockNumber, accounts] = await Promise.all([
+
+    // Check if MetaMask is unlocked and has accounts
+    const accounts = await window.ethereum.request({ method: "eth_accounts" })
+
+    if (accounts.length === 0) {
+      // MetaMask is installed but not connected
+      return {
+        isConnected: false,
+        chainId: null,
+        blockNumber: null,
+        latency: null,
+        isOnSeiNetwork: false,
+        error: null, // No error, just not connected
+      }
+    }
+
+    // Get network info
+    const [chainId, blockNumber] = await Promise.all([
       window.ethereum.request({ method: "eth_chainId" }),
       window.ethereum.request({ method: "eth_blockNumber" }),
-      window.ethereum.request({ method: "eth_accounts" }),
     ])
+
     const latency = Date.now() - startTime
+    const isOnSei = isValidSeiNetwork(chainId)
 
     return {
-      isConnected: accounts.length > 0,
+      isConnected: true,
       chainId,
       blockNumber: Number.parseInt(blockNumber, 16),
       latency,
-      isOnSeiNetwork: isValidSeiNetwork(chainId),
+      isOnSeiNetwork: isOnSei,
       error: null,
     }
   } catch (error) {
+    console.error("Network status error:", error)
     return {
       isConnected: false,
       chainId: null,
@@ -153,5 +204,15 @@ export const getNetworkStatus = async () => {
       isOnSeiNetwork: false,
       error: error instanceof Error ? error.message : "Network error",
     }
+  }
+}
+
+export const canConnectToSei = async (): Promise<boolean> => {
+  try {
+    const blockNumber = await seiClient.getBlockNumber()
+    return blockNumber > 0
+  } catch (error) {
+    console.error("Cannot connect to Sei network:", error)
+    return false
   }
 }

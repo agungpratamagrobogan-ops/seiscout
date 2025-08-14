@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import SpendingPatterns from "@/components/spending-patterns"
 import {
   Brain,
   TrendingUp,
@@ -333,8 +334,15 @@ export default function AnalysisPage() {
             </CardContent>
           </Card>
 
-          <Tabs defaultValue="insights" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 bg-slate-800 border border-slate-700">
+          <Tabs defaultValue="patterns" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 bg-slate-800 border border-slate-700">
+              <TabsTrigger
+                value="patterns"
+                className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Spending Patterns
+              </TabsTrigger>
               <TabsTrigger
                 value="insights"
                 className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
@@ -351,6 +359,10 @@ export default function AnalysisPage() {
                 Risk Assessment
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="patterns" className="space-y-6">
+              <SpendingPatterns walletAddress={analysis.address} />
+            </TabsContent>
 
             <TabsContent value="insights" className="space-y-6">
               {analysis.predictiveInsights.map((insight, index) => (

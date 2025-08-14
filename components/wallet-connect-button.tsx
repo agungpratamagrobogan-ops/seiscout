@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Wallet, AlertTriangle } from "lucide-react"
+import { Wallet, AlertTriangle, ExternalLink } from "lucide-react"
 import { requireSeiNetwork, isValidSeiNetwork } from "@/lib/sei"
 
 interface WalletState {
@@ -91,7 +91,7 @@ export function WalletConnectButton() {
     if (typeof window === "undefined" || !window.ethereum) {
       setWallet((prev) => ({
         ...prev,
-        error: "Please install MetaMask to connect your wallet",
+        error: "MetaMask not installed",
       }))
       return
     }
@@ -106,9 +106,6 @@ export function WalletConnectButton() {
         throw new Error("No accounts found")
       }
 
-      // Get current chain ID
-      const chainId = await window.ethereum.request({ method: "eth_chainId" })
-
       // Try to switch to Sei network
       const networkSuccess = await requireSeiNetwork()
 
@@ -116,11 +113,14 @@ export function WalletConnectButton() {
         throw new Error("Failed to connect to Sei network")
       }
 
+      // Get final chain ID after network switch
+      const chainId = await window.ethereum.request({ method: "eth_chainId" })
+
       setWallet({
         address: accounts[0],
         isConnected: true,
         isConnecting: false,
-        chainId: "0x531", // Sei chain ID
+        chainId,
         error: null,
       })
     } catch (error) {
@@ -144,6 +144,19 @@ export function WalletConnectButton() {
   }
 
   const isOnSeiNetwork = isValidSeiNetwork(wallet.chainId)
+
+  if (wallet.error === "MetaMask not installed") {
+    return (
+      <Button
+        variant="outline"
+        onClick={() => window.open("https://metamask.io/download/", "_blank")}
+        className="border-orange-500 text-orange-500 hover:bg-orange-500/10 bg-transparent"
+      >
+        <ExternalLink className="w-4 h-4 mr-2" />
+        Install MetaMask
+      </Button>
+    )
+  }
 
   if (wallet.error) {
     return (

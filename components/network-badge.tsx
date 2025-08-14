@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Zap, ExternalLink, AlertTriangle, Wifi } from "lucide-react"
-import { getNetworkStatus, requireSeiNetwork } from "@/lib/sei"
+import { ExternalLink, AlertTriangle, Wifi, CheckCircle } from "lucide-react"
+import { getNetworkStatus, requireSeiNetwork, canConnectToSei } from "@/lib/sei"
 
 interface NetworkStatus {
   isConnected: boolean
@@ -24,12 +24,18 @@ export function NetworkBadge() {
     isOnSeiNetwork: false,
     error: null,
   })
+  const [isSwitching, setIsSwitching] = useState(false)
+  const [seiNetworkAvailable, setSeiNetworkAvailable] = useState(true)
 
   useEffect(() => {
     const checkNetworkStatus = async () => {
       try {
         const status = await getNetworkStatus()
         setNetworkStatus(status)
+
+        // Check if Sei network is available
+        const seiAvailable = await canConnectToSei()
+        setSeiNetworkAvailable(seiAvailable)
       } catch (error) {
         console.error("Error checking network status:", error)
         setNetworkStatus((prev) => ({
@@ -41,7 +47,7 @@ export function NetworkBadge() {
 
     checkNetworkStatus()
 
-    const interval = setInterval(checkNetworkStatus, 10000) // Check every 10 seconds
+    const interval = setInterval(checkNetworkStatus, 15000) // Check every 15 seconds
 
     // Listen for chain changes
     if (typeof window !== "undefined" && window.ethereum) {
@@ -69,6 +75,7 @@ export function NetworkBadge() {
   }, [])
 
   const switchToSei = async () => {
+    setIsSwitching(true)
     try {
       await requireSeiNetwork()
       // Refresh status after switching
@@ -76,23 +83,52 @@ export function NetworkBadge() {
       setNetworkStatus(status)
     } catch (error) {
       console.error("Error switching to Sei network:", error)
+      setNetworkStatus((prev) => ({
+        ...prev,
+        error: error instanceof Error ? error.message : "Failed to switch network",
+      }))
+    } finally {
+      setIsSwitching(false)
     }
   }
 
-  if (networkStatus.error) {
+  if (networkStatus.error === "MetaMask not installed") {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => window.open("https://metamask.io/download/", "_blank")}
+        className="border-orange-500 text-orange-500 hover:bg-orange-500/10 bg-transparent h-6 px-2 text-xs"
+      >
+        <AlertTriangle className="w-3 h-3 mr-1" />
+        Install MetaMask
+      </Button>
+    )
+  }
+
+  if (networkStatus.error && networkStatus.error !== "Server-side rendering") {
     return (
       <Badge variant="outline" className="border-red-500 text-red-500">
         <AlertTriangle className="w-3 h-3 mr-1" />
-        {networkStatus.error}
+        Network Error
+      </Badge>
+    )
+  }
+
+  if (!seiNetworkAvailable) {
+    return (
+      <Badge variant="outline" className="border-red-500 text-red-500">
+        <AlertTriangle className="w-3 h-3 mr-1" />
+        Sei RPC Unavailable
       </Badge>
     )
   }
 
   if (!networkStatus.isConnected) {
     return (
-      <Badge variant="outline" className="border-gray-500 text-gray-500">
+      <Badge variant="outline" className="border-slate-500 text-slate-400">
         <Wifi className="w-3 h-3 mr-1" />
-        No Connection
+        Wallet Not Connected
       </Badge>
     )
   }
@@ -103,10 +139,11 @@ export function NetworkBadge() {
         variant="outline"
         size="sm"
         onClick={switchToSei}
+        disabled={isSwitching}
         className="border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 bg-transparent h-6 px-2 text-xs"
       >
         <AlertTriangle className="w-3 h-3 mr-1" />
-        Switch to Sei EVM
+        {isSwitching ? "Switching..." : "Switch to Sei EVM"}
       </Button>
     )
   }
@@ -114,8 +151,8 @@ export function NetworkBadge() {
   return (
     <div className="flex items-center space-x-2">
       <Badge variant="outline" className="border-emerald-500 text-emerald-500">
-        <Zap className="w-3 h-3 mr-1" />
-        Sei EVM 1329
+        <CheckCircle className="w-3 h-3 mr-1" />
+        Sei EVM (1329)
       </Badge>
       {networkStatus.latency && (
         <Badge variant="outline" className="border-emerald-400 text-emerald-400 text-xs">
@@ -125,8 +162,9 @@ export function NetworkBadge() {
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 px-2 text-gray-400 hover:bg-gray-500/20"
+        className="h-6 px-2 text-slate-400 hover:text-emerald-500"
         onClick={() => window.open("https://seitrace.com", "_blank")}
+        title="View on Seitrace Explorer"
       >
         <ExternalLink className="w-3 h-3" />
       </Button>
