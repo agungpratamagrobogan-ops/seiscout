@@ -27,23 +27,40 @@ export function NetworkBadge() {
 
   useEffect(() => {
     const checkNetworkStatus = async () => {
-      const status = await getNetworkStatus()
-      setNetworkStatus(status)
+      try {
+        const status = await getNetworkStatus()
+        setNetworkStatus(status)
+      } catch (error) {
+        console.error("Error checking network status:", error)
+        setNetworkStatus((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : "Network error",
+        }))
+      }
     }
 
     checkNetworkStatus()
 
-    const interval = setInterval(checkNetworkStatus, 15000)
+    const interval = setInterval(checkNetworkStatus, 10000) // Check every 10 seconds
 
     // Listen for chain changes
     if (typeof window !== "undefined" && window.ethereum) {
-      window.ethereum.on("chainChanged", () => {
-        checkNetworkStatus()
-      })
+      const handleChainChanged = () => {
+        setTimeout(checkNetworkStatus, 500) // Small delay to ensure chain switch is complete
+      }
 
-      window.ethereum.on("accountsChanged", () => {
-        checkNetworkStatus()
-      })
+      const handleAccountsChanged = () => {
+        setTimeout(checkNetworkStatus, 500)
+      }
+
+      window.ethereum.on("chainChanged", handleChainChanged)
+      window.ethereum.on("accountsChanged", handleAccountsChanged)
+
+      return () => {
+        clearInterval(interval)
+        window.ethereum?.removeListener("chainChanged", handleChainChanged)
+        window.ethereum?.removeListener("accountsChanged", handleAccountsChanged)
+      }
     }
 
     return () => {

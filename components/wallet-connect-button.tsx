@@ -54,7 +54,7 @@ export function WalletConnectButton() {
 
     // Listen for account changes
     if (typeof window !== "undefined" && window.ethereum) {
-      window.ethereum.on("accountsChanged", (accounts: string[]) => {
+      const handleAccountsChanged = (accounts: string[]) => {
         if (accounts.length > 0) {
           setWallet((prev) => ({
             ...prev,
@@ -71,11 +71,19 @@ export function WalletConnectButton() {
             error: null,
           })
         }
-      })
+      }
 
-      window.ethereum.on("chainChanged", (chainId: string) => {
+      const handleChainChanged = (chainId: string) => {
         setWallet((prev) => ({ ...prev, chainId }))
-      })
+      }
+
+      window.ethereum.on("accountsChanged", handleAccountsChanged)
+      window.ethereum.on("chainChanged", handleChainChanged)
+
+      return () => {
+        window.ethereum?.removeListener("accountsChanged", handleAccountsChanged)
+        window.ethereum?.removeListener("chainChanged", handleChainChanged)
+      }
     }
   }, [])
 
@@ -83,7 +91,7 @@ export function WalletConnectButton() {
     if (typeof window === "undefined" || !window.ethereum) {
       setWallet((prev) => ({
         ...prev,
-        error: "Please install MetaMask or another Web3 wallet",
+        error: "Please install MetaMask to connect your wallet",
       }))
       return
     }
@@ -94,6 +102,14 @@ export function WalletConnectButton() {
       // Request account access
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
 
+      if (accounts.length === 0) {
+        throw new Error("No accounts found")
+      }
+
+      // Get current chain ID
+      const chainId = await window.ethereum.request({ method: "eth_chainId" })
+
+      // Try to switch to Sei network
       const networkSuccess = await requireSeiNetwork()
 
       if (!networkSuccess) {
@@ -104,7 +120,7 @@ export function WalletConnectButton() {
         address: accounts[0],
         isConnected: true,
         isConnecting: false,
-        chainId: "0x531",
+        chainId: "0x531", // Sei chain ID
         error: null,
       })
     } catch (error) {

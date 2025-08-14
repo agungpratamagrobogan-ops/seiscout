@@ -97,6 +97,24 @@ export const requireSeiNetwork = async (): Promise<boolean> => {
   }
 }
 
+// Helper function to check if MetaMask is installed
+export const isMetaMaskInstalled = (): boolean => {
+  return typeof window !== "undefined" && !!window.ethereum
+}
+
+// Function to get current wallet address
+export const getCurrentWalletAddress = async (): Promise<string | null> => {
+  if (!isMetaMaskInstalled()) return null
+
+  try {
+    const accounts = await window.ethereum!.request({ method: "eth_accounts" })
+    return accounts.length > 0 ? accounts[0] : null
+  } catch (error) {
+    console.error("Error getting wallet address:", error)
+    return null
+  }
+}
+
 export const getNetworkStatus = async () => {
   if (typeof window === "undefined" || !window.ethereum) {
     return {
@@ -104,6 +122,7 @@ export const getNetworkStatus = async () => {
       chainId: null,
       blockNumber: null,
       latency: null,
+      isOnSeiNetwork: false,
       error: "No wallet detected",
     }
   }
