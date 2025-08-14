@@ -3,14 +3,16 @@
 import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Zap, ExternalLink, AlertTriangle } from "lucide-react"
-import { getSeiNetworkParams } from "@/lib/sei"
+import { Zap, ExternalLink, AlertTriangle, Wifi } from "lucide-react"
+import { getNetworkStatus, requireSeiNetwork } from "@/lib/sei"
 
 interface NetworkStatus {
   isConnected: boolean
   chainId: string | null
   blockNumber: number | null
   latency: number | null
+  isOnSeiNetwork: boolean
+  error: string | null
 }
 
 export function NetworkBadge() {
@@ -19,39 +21,28 @@ export function NetworkBadge() {
     chainId: null,
     blockNumber: null,
     latency: null,
+    isOnSeiNetwork: false,
+    error: null,
   })
 
   useEffect(() => {
     const checkNetworkStatus = async () => {
-      if (typeof window !== "undefined" && window.ethereum) {
-        try {
-          const startTime = Date.now()
-          const chainId = await window.ethereum.request({ method: "eth_chainId" })
-          const blockNumber = await window.ethereum.request({ method: "eth_blockNumber" })
-          const latency = Date.now() - startTime
-
-          setNetworkStatus({
-            isConnected: true,
-            chainId,
-            blockNumber: Number.parseInt(blockNumber, 16),
-            latency,
-          })
-        } catch (error) {
-          console.error("Error checking network status:", error)
-          setNetworkStatus((prev) => ({ ...prev, isConnected: false }))
-        }
-      }
+      const status = await getNetworkStatus()
+      setNetworkStatus(status)
     }
 
     checkNetworkStatus()
 
-    // Check network status every 30 seconds
-    const interval = setInterval(checkNetworkStatus, 30000)
+    const interval = setInterval(checkNetworkStatus, 15000)
 
     // Listen for chain changes
     if (typeof window !== "undefined" && window.ethereum) {
-      window.ethereum.on("chainChanged", (chainId: string) => {
-        setNetworkStatus((prev) => ({ ...prev, chainId }))
+      window.ethereum.on("chainChanged", () => {
+        checkNetworkStatus()
+      })
+
+      window.ethereum.on("accountsChanged", () => {
+        checkNetworkStatus()
       })
     }
 
@@ -61,42 +52,35 @@ export function NetworkBadge() {
   }, [])
 
   const switchToSei = async () => {
-    if (typeof window === "undefined" || !window.ethereum) {
-      return
-    }
-
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x531" }],
-      })
-    } catch (switchError: any) {
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [getSeiNetworkParams()],
-          })
-        } catch (addError) {
-          console.error("Error adding Sei network:", addError)
-        }
-      }
+      await requireSeiNetwork()
+      // Refresh status after switching
+      const status = await getNetworkStatus()
+      setNetworkStatus(status)
+    } catch (error) {
+      console.error("Error switching to Sei network:", error)
     }
   }
 
-  const isOnSeiNetwork = networkStatus.chainId === "0x531"
-  const isConnected = networkStatus.isConnected
-
-  if (!isConnected) {
+  if (networkStatus.error) {
     return (
-      <Badge variant="outline" className="border-gray-500 text-gray-500">
+      <Badge variant="outline" className="border-red-500 text-red-500">
         <AlertTriangle className="w-3 h-3 mr-1" />
-        No Network
+        {networkStatus.error}
       </Badge>
     )
   }
 
-  if (!isOnSeiNetwork) {
+  if (!networkStatus.isConnected) {
+    return (
+      <Badge variant="outline" className="border-gray-500 text-gray-500">
+        <Wifi className="w-3 h-3 mr-1" />
+        No Connection
+      </Badge>
+    )
+  }
+
+  if (!networkStatus.isOnSeiNetwork) {
     return (
       <Button
         variant="outline"
@@ -105,19 +89,19 @@ export function NetworkBadge() {
         className="border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 bg-transparent h-6 px-2 text-xs"
       >
         <AlertTriangle className="w-3 h-3 mr-1" />
-        Switch to Sei
+        Switch to Sei EVM
       </Button>
     )
   }
 
   return (
     <div className="flex items-center space-x-2">
-      <Badge variant="outline" className="border-green-500 text-green-500">
+      <Badge variant="outline" className="border-emerald-500 text-emerald-500">
         <Zap className="w-3 h-3 mr-1" />
         Sei EVM 1329
       </Badge>
       {networkStatus.latency && (
-        <Badge variant="outline" className="border-[#22D3EE] text-[#22D3EE] text-xs">
+        <Badge variant="outline" className="border-emerald-400 text-emerald-400 text-xs">
           {networkStatus.latency}ms
         </Badge>
       )}

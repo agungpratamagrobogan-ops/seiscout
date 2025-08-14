@@ -57,3 +57,82 @@ export const TOKEN_ADDRESSES = {
 } as const
 
 export const SEI_TOKENS = TOKEN_ADDRESSES
+
+export const isValidSeiNetwork = (chainId: string | null): boolean => {
+  return chainId === "0x531" // 1329 in hex
+}
+
+export const requireSeiNetwork = async (): Promise<boolean> => {
+  if (typeof window === "undefined" || !window.ethereum) {
+    throw new Error("MetaMask not installed")
+  }
+
+  try {
+    const chainId = await window.ethereum.request({ method: "eth_chainId" })
+
+    if (!isValidSeiNetwork(chainId)) {
+      // Try to switch to Sei network
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x531" }],
+        })
+        return true
+      } catch (switchError: any) {
+        // If network doesn't exist, add it
+        if (switchError.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [getSeiNetworkParams()],
+          })
+          return true
+        }
+        throw new Error("Failed to switch to Sei network")
+      }
+    }
+    return true
+  } catch (error) {
+    console.error("Network guard error:", error)
+    return false
+  }
+}
+
+export const getNetworkStatus = async () => {
+  if (typeof window === "undefined" || !window.ethereum) {
+    return {
+      isConnected: false,
+      chainId: null,
+      blockNumber: null,
+      latency: null,
+      error: "No wallet detected",
+    }
+  }
+
+  try {
+    const startTime = Date.now()
+    const [chainId, blockNumber, accounts] = await Promise.all([
+      window.ethereum.request({ method: "eth_chainId" }),
+      window.ethereum.request({ method: "eth_blockNumber" }),
+      window.ethereum.request({ method: "eth_accounts" }),
+    ])
+    const latency = Date.now() - startTime
+
+    return {
+      isConnected: accounts.length > 0,
+      chainId,
+      blockNumber: Number.parseInt(blockNumber, 16),
+      latency,
+      isOnSeiNetwork: isValidSeiNetwork(chainId),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      isConnected: false,
+      chainId: null,
+      blockNumber: null,
+      latency: null,
+      isOnSeiNetwork: false,
+      error: error instanceof Error ? error.message : "Network error",
+    }
+  }
+}

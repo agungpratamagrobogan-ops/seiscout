@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Download, CheckCircle, Database, Activity, BarChart3, FileText, Zap } from "lucide-react"
 import { seitraceTx, seitraceAddr } from "@/lib/sei"
 import Navigation from "@/components/navigation"
+import RealTimeAlerts from "@/components/real-time-alerts"
 
 interface VerificationAlert {
   id: string
@@ -295,7 +296,23 @@ export default function VerifyPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Rest of the verification dashboard content remains the same but with improved colors */}
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* ... existing overview cards ... */}
+
+                <div className="lg:col-span-1">
+                  <RealTimeAlerts
+                    maxAlerts={20}
+                    autoRefresh={true}
+                    showLatency={true}
+                    enableSound={false}
+                    className="h-full"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ... existing tab content ... */}
           </Tabs>
         </div>
       </div>
